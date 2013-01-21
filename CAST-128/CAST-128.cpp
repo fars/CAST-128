@@ -110,12 +110,16 @@ void CaluK(IN const BYTE key[16], OUT UINT32 Km[16], OUT UINT32 Kr[16])
 	//~~~~~~~~~
 	BYTE z[16];
 	BYTE x[16];
-	UINT32 K[17];
+	UINT32 k[33];
 	//~~~~~~~~~
 
 	// The subkeys are formed from the key x0x1x2x3x4x5x6x7x8x9xAxBxCxDxExF
 	// as follows.
 	memcpy(x, key, 16);
+
+	UINT32 *K = &k[0];
+
+CALCU_K16:
 
 	// z0z1z2z3 = x0x1x2x3 ^ S5[xD] ^ S6[xF] ^ S7[xC] ^ S8[xE] ^ S7[x8];
 	// z4z5z6z7 = x8x9xAxB ^ S5[z0] ^ S6[z2] ^ S7[z1] ^ S8[z3] ^ S8[xA];
@@ -194,7 +198,27 @@ void CaluK(IN const BYTE key[16], OUT UINT32 Km[16], OUT UINT32 Kr[16])
 	K[16] = CaluK(x, 0xE, 0xF, 1, 0, 8, 0xD);
 
 	for (int i = 1; i <= 16; ++i) {
-		printf("K %d : %x\n", i, K[i]);
+		printf("K %d : %x\n", K - k + i, K[i]);
+	}
+
+	if (K == k) {
+		K += 16;
+		goto CALCU_K16;
+	}
+
+
+//    Let Km1, ..., Km16 be 32-bit masking subkeys (one per round).
+//    Let Kr1,    , Kr16 be 32-bit rotate subkeys (one per round); only
+//        the least significant 5 bits are used in each round.;
+//    for (i=1; i<=16; i++)  { Kmi = Ki;  Kri = K16+i; };
+
+	for (int i = 1; i <= 16; ++i) {
+		Km[i] = k[i];
+		Kr[i] = k[16 + i] & 0x1f;
+	}
+
+	for (int i = 1; i <= 16; ++i) {
+		printf("i %d  Kmi %x, Kri %x\n", i, Km[i], Kr[i]);
 	}
 }
 
