@@ -21,14 +21,6 @@ void InitSubstitutionBoxes(void)
 
 // ============================================================================
 // ==============================================================================
-void plaintext2L0_R0(BYTE plaintext[8], UINT32 &L0, UINT32 &R0)
-{
-	L0 = *(UINT32 *) (plaintext + 4);
-	R0 = *(UINT32 *) (plaintext);
-}
-
-// ============================================================================
-// ==============================================================================
 UINT32 fourByte2uint32(BYTE byte0, BYTE byte1, BYTE byte2, BYTE byte3)
 {
 	//~~~~~~~~~~~~~~~~~~
@@ -55,6 +47,16 @@ UINT32 byteArr2uint(const BYTE byte[16], int iByte)
 
 // ============================================================================
 // ==============================================================================
+void uint2fourByte(UINT32 uint, OUT BYTE &byte1, OUT BYTE &byte2, OUT BYTE &byte3, OUT BYTE &byte4)
+{
+	byte1 = (uint & 0xff000000) >> 24;
+	byte2 = (uint & 0x00ff0000) >> 16;
+	byte3 = (uint & 0x0000ff00) >> 8;
+	byte4 = uint & 0x000000ff;
+}
+
+// ============================================================================
+// ==============================================================================
 void uint2fourByte(UINT32 uint, OUT BYTE byte[16], int iByte)
 {
 	assert(iByte <= 12);
@@ -63,6 +65,28 @@ void uint2fourByte(UINT32 uint, OUT BYTE byte[16], int iByte)
 	byte[iByte + 2] = (uint & 0x0000ff00) >> 8;
 	byte[iByte + 3] = uint & 0x000000ff;
 }
+
+
+// ============================================================================
+// ==============================================================================
+void byte82uint32LR(BYTE byte[8], UINT32 &L, UINT32 &R)
+{
+	L = byteArr2uint(byte, 0);
+	R = byteArr2uint(byte, 4);
+// 	L = *(UINT32 *) (byte + 4);
+// 	R = *(UINT32 *) (byte);
+}
+
+// ============================================================================
+// ==============================================================================
+void uint32LR2byte8(OUT BYTE byte[8], UINT32 L, UINT32 R)
+{
+	uint2fourByte(L, byte, 0);
+	uint2fourByte(R, byte, 4);
+// 	memcpy(byte, &L, 4);
+// 	memcpy(byte, &R, 4);
+}
+
 
 // ============================================================================
 //    zx[izx]zx[izx+1]zx[izx+2]zx[izx+3] = xz[ixz]xz[ixz+1]xz[ixz+2]xz[ixz+3] ^
@@ -117,10 +141,11 @@ void CaluK(IN const BYTE key[16], OUT UINT32 Km[16], OUT UINT32 Kr[16])
 	// as follows.
 	memcpy(x, key, 16);
 
+	//~~~~~~~~~~~~~~
 	UINT32 *K = &k[0];
+	//~~~~~~~~~~~~~~
 
 CALCU_K16:
-
 	// z0z1z2z3 = x0x1x2x3 ^ S5[xD] ^ S6[xF] ^ S7[xC] ^ S8[xE] ^ S7[x8];
 	// z4z5z6z7 = x8x9xAxB ^ S5[z0] ^ S6[z2] ^ S7[z1] ^ S8[z3] ^ S8[xA];
 	// z8z9zAzB = xCxDxExF ^ S5[z7] ^ S6[z6] ^ S7[z5] ^ S8[z4] ^ S5[x9];
@@ -206,12 +231,14 @@ CALCU_K16:
 		goto CALCU_K16;
 	}
 
-
-//    Let Km1, ..., Km16 be 32-bit masking subkeys (one per round).
-//    Let Kr1,    , Kr16 be 32-bit rotate subkeys (one per round); only
-//        the least significant 5 bits are used in each round.;
-//    for (i=1; i<=16; i++)  { Kmi = Ki;  Kri = K16+i; };
-
+	// Let Km1, ..., Km16 be 32-bit masking subkeys (one per round). Let
+	// Kr1, , Kr16 be 32-bit rotate subkeys (one per round);
+	// only the least significant 5 bits are used in each round.;
+	// for (i=1;
+	// i<=16;
+	// i++) { Kmi = Ki;
+	// Kri = K16+i;
+	// };
 	for (int i = 1; i <= 16; ++i) {
 		Km[i] = k[i];
 		Kr[i] = k[16 + i] & 0x1f;
@@ -224,8 +251,77 @@ CALCU_K16:
 
 // ============================================================================
 // ==============================================================================
+UINT32 uint32cirShiftL(UINT32 uint32, int nLeftShift)
+{
+	return(uint32 >> (32 - nLeftShift)) | (uint32 >> nLeftShift);
+}
+
+// ============================================================================
+// ==============================================================================
+UINT32 uint32cirShiftR(UINT32 uint32, int nRightShift)
+{
+	return(uint32 << (32 - nRightShift)) | (uint32 >> nRightShift);
+}
+
+// ============================================================================
+//    Three different round functions are used in CAST-128. The rounds are as
+//    follows (where "D" is the data input to the f function and "Ia" - "Id" are
+//    the most significant byte through least significant byte of I,
+//    respectively). Note that "+" and "-" are addition and subtraction modulo
+//    2**32, "^" is bitwise XOR, and "<<<" is the circular left- shift
+//    operation.;
+//    Rounds 1, 4, 7, 10, 13, and 16 use f function Type 1;
+//    Rounds 2, 5, 8, 11, and 14 use f function Type 2;
+//    Rounds 3, 6, 9, 12, and 15 use f function Type 3;
+// ============================================================================
+UINT32 f(int iRound, int D, UINT32 Kmi, UINT32 Kri)
+{
+	//~~~~~~~~~~~~~~~~
+	UINT32 I;
+	UINT32 u32f;
+	BYTE Ia, Ib, Ic, Id;
+	//~~~~~~~~~~~~~~~~
+
+	switch (iRound % 3) {
+	case 1:
+		// Type 1: I = ((Kmi + D) <<< Kri);
+		I = uint32cirShiftR(Kmi + D, Kri);
+		uint2fourByte(I, Ia, Ib, Ic, Id);
+
+		// f = ((S1[Ia] ^ S2[Ib]) - S3[Ic]) + S4[Id];
+		u32f = (S[1][Ia] ^ S[2][Ib]) - S[3][Ic] + S[4][Id];
+		break;
+	case 2:
+		// Type 2: I = ((Kmi ^ D) <<< Kri);
+		I = uint32cirShiftR(Kmi ^ D, Kri);
+		uint2fourByte(I, Ia, Ib, Ic, Id);
+
+		// f = ((S1[Ia] - S2[Ib]) + S3[Ic]) ^ S4[Id];
+		// 1
+		u32f = ((S[1][Ia] - S[2][Ib]) + S[3][Ic]) ^ S[4][Id];
+		break;
+	case 0:
+		// Type 3: I = ((Kmi - D) <<< Kri);
+		I = uint32cirShiftR(Kmi - D, Kri);
+		uint2fourByte(I, Ia, Ib, Ic, Id);
+
+		// f = ((S1[Ia] + S2[Ib]) ^ S3[Ic]) - S4[Id];
+		u32f = ((S[1][Ia] + S[2][Ib]) ^ S[3][Ic]) - S[4][Id];
+		break;
+	default:
+		assert(0);
+		break;
+	}
+
+	return u32f;
+}
+
+// ============================================================================
+// ==============================================================================
 int _tmain(int argc, _TCHAR *argv[])
 {
+	InitSubstitutionBoxes();
+
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	const int ROUND = 16;
 	UINT32 L[ROUND + 1];
@@ -239,15 +335,33 @@ int _tmain(int argc, _TCHAR *argv[])
 	UINT32 Kr[16];
 	//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	plaintext2L0_R0(plaintext, L[0], R[0]);
+	CaluK(key, Km, Kr);
 
-	InitSubstitutionBoxes();
+	// 2. (L0,R0) <-- (m1...m64). (Split the plaintext into left and right
+	// 32-bit halves L0 = m1...m32 and R0 = m33...m64.);
+	byte82uint32LR(plaintext, L[0], R[0]);
 
+	// 3. (16 rounds) for i from 1 to 16, compute Li and Ri as follows:;
+	// Li = Ri-1;
+	// Ri = Li-1 ^ f(Ri-1,Kmi,Kri), where f is defined in Section 2.2;
+	// (f is of Type 1, Type 2, or Type 3, depending on i).;
 	for (int i = 1; i <= ROUND; ++i) {
 		L[i] = R[i - 1];
+		R[i] = L[i - 1] ^ f(i, R[i - 1], Km[i], Kr[i]);
 	}
 
-	CaluK(key, Km, Kr);
+	//~~~~~~~~~~~~~~~
+	// 4. c1...c64 <-- (R16,L16). (Exchange final blocks L16, R16 and
+	// concatenate to form the ciphertext.
+	BYTE ciphertext[8];
+	//~~~~~~~~~~~~~~~
+
+	uint32LR2byte8(ciphertext, R[16], L[16]);
+
+	printf("ciphertext: ");
+	for (int i = 0; i < 8; ++i) {
+		printf("%x ", ciphertext[i]);
+	}
 
 	//~~~~~~~~~~~~~
 	char szLine[256];
