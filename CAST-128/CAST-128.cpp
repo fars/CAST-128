@@ -72,8 +72,9 @@ void byte82uint32LR(BYTE byte[8], UINT32 &L, UINT32 &R)
 {
 	L = byteArr2uint(byte, 0);
 	R = byteArr2uint(byte, 4);
-// 	L = *(UINT32 *) (byte + 4);
-// 	R = *(UINT32 *) (byte);
+
+	// L = *(UINT32 *) (byte + 4);
+	// R = *(UINT32 *) (byte);
 }
 
 // ============================================================================
@@ -82,8 +83,9 @@ void uint32LR2byte8(OUT BYTE byte[8], UINT32 L, UINT32 R)
 {
 	uint2fourByte(L, byte, 0);
 	uint2fourByte(R, byte, 4);
-// 	memcpy(byte, &L, 4);
-// 	memcpy(byte, &R, 4);
+
+	// memcpy(byte, &L, 4);
+	// memcpy(byte, &R, 4);
 }
 
 // ============================================================================
@@ -359,6 +361,32 @@ int _tmain(int argc, _TCHAR *argv[])
 	for (int i = 0; i < 8; ++i) {
 		printf("%x ", ciphertext[i]);
 	}
+
+	printf("\n");
+
+	// Decryption is identical to the encryption algorithm given above,;
+	// except that the rounds (and therefore the subkey pairs) are used in;
+	// reverse order to compute (L0,R0) from (R16,L16).;
+	for (int i = ROUND - 1; i >= 0; --i) {
+
+		// Ri = Li+1;
+		// Li = Ri+1 ^ f(Ri, Kmi+1, Kri+1);
+		R[i] = L[i + 1];
+		L[i] = R[i + 1] ^ f(i + 1, R[i], Km[i + 1], Kr[i + 1]);
+	}
+
+	//~~~~~~~~~~~~
+	BYTE orgText[8];
+	//~~~~~~~~~~~~
+
+	uint32LR2byte8(orgText, L[0], R[0]);
+
+	printf("orgText: ");
+	for (int i = 0; i < 8; ++i) {
+		printf("%x ", orgText[i]);
+	}
+
+	printf("\n");
 
 	//~~~~~~~~~~~~~
 	char szLine[256];
