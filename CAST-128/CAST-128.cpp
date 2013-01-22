@@ -66,7 +66,6 @@ void uint2fourByte(UINT32 uint, OUT BYTE byte[16], int iByte)
 	byte[iByte + 3] = uint & 0x000000ff;
 }
 
-
 // ============================================================================
 // ==============================================================================
 void byte82uint32LR(BYTE byte[8], UINT32 &L, UINT32 &R)
@@ -86,7 +85,6 @@ void uint32LR2byte8(OUT BYTE byte[8], UINT32 L, UINT32 R)
 // 	memcpy(byte, &L, 4);
 // 	memcpy(byte, &R, 4);
 }
-
 
 // ============================================================================
 //    zx[izx]zx[izx+1]zx[izx+2]zx[izx+3] = xz[ixz]xz[ixz+1]xz[ixz+2]xz[ixz+3] ^
@@ -253,7 +251,7 @@ CALCU_K16:
 // ==============================================================================
 UINT32 uint32cirShiftL(UINT32 uint32, int nLeftShift)
 {
-	return(uint32 >> (32 - nLeftShift)) | (uint32 >> nLeftShift);
+	return(uint32 >> (32 - nLeftShift)) | (uint32 << nLeftShift);
 }
 
 // ============================================================================
@@ -285,7 +283,7 @@ UINT32 f(int iRound, int D, UINT32 Kmi, UINT32 Kri)
 	switch (iRound % 3) {
 	case 1:
 		// Type 1: I = ((Kmi + D) <<< Kri);
-		I = uint32cirShiftR(Kmi + D, Kri);
+		I = uint32cirShiftL(Kmi + D, Kri);
 		uint2fourByte(I, Ia, Ib, Ic, Id);
 
 		// f = ((S1[Ia] ^ S2[Ib]) - S3[Ic]) + S4[Id];
@@ -293,16 +291,15 @@ UINT32 f(int iRound, int D, UINT32 Kmi, UINT32 Kri)
 		break;
 	case 2:
 		// Type 2: I = ((Kmi ^ D) <<< Kri);
-		I = uint32cirShiftR(Kmi ^ D, Kri);
+		I = uint32cirShiftL(Kmi ^ D, Kri);
 		uint2fourByte(I, Ia, Ib, Ic, Id);
 
 		// f = ((S1[Ia] - S2[Ib]) + S3[Ic]) ^ S4[Id];
-		// 1
 		u32f = ((S[1][Ia] - S[2][Ib]) + S[3][Ic]) ^ S[4][Id];
 		break;
 	case 0:
 		// Type 3: I = ((Kmi - D) <<< Kri);
-		I = uint32cirShiftR(Kmi - D, Kri);
+		I = uint32cirShiftL(Kmi - D, Kri);
 		uint2fourByte(I, Ia, Ib, Ic, Id);
 
 		// f = ((S1[Ia] + S2[Ib]) ^ S3[Ic]) - S4[Id];
