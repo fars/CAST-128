@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include "cast_s.h"
 
+#define _CRT_SECURE_NO_WARNINGS
+
 UINT32 S[9][256];
 
 // ============================================================================
@@ -392,7 +394,7 @@ int _tmain(int argc, _TCHAR *argv[])
 	char szLine[256];
 	//~~~~~~~~~~~~~
 
-	while (gets(szLine));
+	while (gets_s(szLine, sizeof(szLine)));
 
 	return 0;
 }
